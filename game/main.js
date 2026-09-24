@@ -313,10 +313,25 @@ gl_Position = projectionMatrix * mvPosition;`;
   /* ---------- items (world space, pooled) ---------- */
   const seedGeo = new THREE.SphereGeometry(0.34, 20, 16);
   const seedMat = new THREE.MeshLambertMaterial({ color: C.gold, emissive: 0x4a3205 });
-  const woolGeo = new THREE.SphereGeometry(0.42, 20, 16);
-  const woolMat = new THREE.MeshLambertMaterial({ color: C.wool });
-  const yarnGeo = new THREE.TorusGeometry(0.43, 0.05, 8, 24);
-  const yarnMat = new THREE.MeshLambertMaterial({ color: C.woolLine });
+  // Obstacles are bright lettered toy blocks — unmistakably a toy in the
+  // way, never a stone. One shared cube geometry, one canvas texture per
+  // block (colour + white letter).
+  const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+  const blockMats = [['A', '#ff5a6e'], ['B', '#ffc94d'], ['C', '#4f9dff']].map(([letter, col]) =>
+    new THREE.MeshLambertMaterial({
+      map: canvasTex(128, 128, (x, w, h) => {
+        x.fillStyle = col;
+        x.fillRect(0, 0, w, h);
+        x.strokeStyle = 'rgba(255,255,255,0.85)';
+        x.lineWidth = 9;
+        x.strokeRect(11, 11, w - 22, h - 22);
+        x.fillStyle = '#ffffff';
+        x.font = '800 78px sans-serif';
+        x.textAlign = 'center';
+        x.textBaseline = 'middle';
+        x.fillText(letter, w / 2, h / 2 + 4);
+      }),
+    }));
 
   function starShape(R = 0.52, r = 0.24) {
     const s = new THREE.Shape();
@@ -345,18 +360,19 @@ gl_Position = projectionMatrix * mvPosition;`;
       return g;
     },
     obs() {
-      const g = new THREE.Group(), roll = new THREE.Group();
-      const b = new THREE.Mesh(woolGeo, woolMat);
-      b.castShadow = true;
-      roll.add(b);
-      for (const [rx, ry] of [[Math.PI / 2.1, 0], [Math.PI / 3, Math.PI / 3], [-Math.PI / 2.4, -Math.PI / 5]]) {
-        const y = new THREE.Mesh(yarnGeo, yarnMat);
-        y.rotation.set(rx, ry, 0);
-        roll.add(y);
+      const g = new THREE.Group();
+      const sizes = [0.78, 0.66, 0.55];
+      let y = 0;
+      for (let i = 0; i < 3; i++) {
+        const b = new THREE.Mesh(blockGeo, blockMats[i]);
+        b.scale.setScalar(sizes[i]);
+        b.position.y = y + sizes[i] / 2;
+        b.rotation.y = (i - 1) * 0.22;
+        b.castShadow = true;
+        g.add(b);
+        y += sizes[i] * 0.97;
       }
-      roll.position.y = 0.44;
-      g.add(roll);
-      g.userData.tick = (it, dt, v) => { roll.rotation.x += v * K * dt / 0.42; };
+      g.userData.tick = (it, dt) => { g.rotation.z = Math.sin(it.d * 9) * 0.05; };  // gentle teeter
       return g;
     },
     power() {
@@ -376,6 +392,20 @@ gl_Position = projectionMatrix * mvPosition;`;
   const items = [];
   const pool = { seed: [], obs: [], power: [] };
   const flying = [];                 // knocked-away obstacles still in the air
+
+  // Dizzy stars that circle above the hamster during a stumble.
+  const dizzy = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const s = new THREE.Mesh(starGeo, starMat);
+    s.scale.setScalar(0.38);
+    const a = i / 3 * Math.PI * 2;
+    s.position.set(Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72);
+    s.rotation.x = -0.35;
+    dizzy.add(s);
+  }
+  dizzy.position.y = 2.6;
+  dizzy.visible = false;
+  player.add(dizzy);
 
   function deactivate(it) {
     if (!it.active) return;
@@ -403,6 +433,8 @@ gl_Position = projectionMatrix * mvPosition;`;
     it.d = 0.001;
     it.active = true;
     it.obj.visible = true;
+    it.obj.rotation.set(0, 0, 0);
+    it.obj.scale.setScalar(1);
     it.obj.position.set(laneCenterX(lane), 0, zOfD(it.d));
   }
 
@@ -487,6 +519,23 @@ gl_Position = projectionMatrix * mvPosition;`;
     }
     pGeo.attributes.position.needsUpdate = true;
   }
+
+  // Soft radial glow flashed on a star pickup.
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      map: canvasTex(128, 128, (x, w, h) => {
+        const g = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+        g.addColorStop(0, 'rgba(255,240,170,1)');
+        g.addColorStop(0.5, 'rgba(255,215,107,0.55)');
+        g.addColorStop(1, 'rgba(255,215,107,0)');
+        x.fillStyle = g;
+        x.fillRect(0, 0, w, h);
+      }),
+      transparent: true, depthWrite: false, opacity: 0,
+    }));
+  glow.visible = false;
+  scene.add(glow);
 
   /* ---------- finish gate: a bright arch that rolls in like an item ---------- */
   const GATE_SPEED = SCROLL * K;                      // world units per race-second
@@ -622,6 +671,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitch: -1e9,
     spawnAcc: 0, spawnEvery: SPAWN0, stumbleUntil: -1, boostUntil: -1, invulnUntil: -1,
     finished: false, shakeT: 0, tween: null, leanUntil: -1, tintUntil: -1, runT: 0,
+    hitK: -1, dizzyT: 0,
   };
 
   const eff = () => race.nowMs < race.stumbleUntil ? 0.45 : race.nowMs < race.boostUntil ? 1.55 : 1;
@@ -646,30 +696,64 @@ gl_Position = projectionMatrix * mvPosition;`;
   }
 
   function collect(it) {
-    deactivate(it);
+    it.active = false;              // stays visible: it squashes into the hamster
     race.score++;
     scoreEl.textContent = race.score;
     race.boostUntil = race.nowMs + 240;
     pop('plus', '');
     snd.pling();
+    const o = it.obj;
+    burst(o.position.x, 0.9, o.position.z, { n: 10, cols: [0xffc94d, 0xfff3b0], speed: 1.7, up: 2.2, life: 0.5 });
+    const from = o.position.clone();
+    const to = new THREE.Vector3(player.position.x, 1.15, 0.4);
+    addFx(0.17, k => {
+      o.position.lerpVectors(from, to, k);
+      o.scale.setScalar(1 - 0.78 * k);
+    }, () => { o.visible = false; o.scale.setScalar(1); pool[it.type].push(it); });
   }
   function powerup(it) {
-    deactivate(it);
+    it.active = false;              // stays visible for the glow flash
     race.boostUntil = race.nowMs + 3000;
     race.invulnUntil = race.nowMs + 3000;
     hamMat.color.setHex(0xffe08a);
     race.tintUntil = race.nowMs + 3000;
     pop('star_pop', 'star');
     snd.whoosh();
+    const o = it.obj;
+    burst(o.position.x, 1.2, o.position.z, { n: 16, cols: [0xffd76b, 0xffffff], speed: 2.4, up: 3.4, life: 0.7 });
+    glow.position.set(o.position.x, 1.2, o.position.z);
+    addFx(0.5, k => {
+      glow.visible = true;
+      glow.scale.setScalar(0.7 + 2.6 * k);
+      glow.material.opacity = 0.8 * (1 - k);
+      o.scale.setScalar(Math.max(0.01, 1 - 1.3 * k));
+    }, () => {
+      glow.visible = false;
+      o.visible = false;
+      o.scale.setScalar(1);
+      pool[it.type].push(it);
+    });
   }
   function hit(it) {
-    deactivate(it);
+    it.active = false;              // stays visible: it gets knocked away
+    const o = it.obj;
+    it.knock = {
+      t: 0,
+      vx: (o.position.x >= player.position.x ? 1 : -1) * (2.4 + Math.random() * 1.4),
+      vy: 7 + Math.random(),
+      vz: -(2.5 + Math.random() * 1.5),
+      sx: (Math.random() - 0.5) * 12,
+      sz: (Math.random() - 0.5) * 10,
+    };
+    flying.push(it);
     race.stumbles++;
     race.stumbleUntil = race.nowMs + 1300;
     race.invulnUntil = race.nowMs + 1100;
     hamMat.color.setHex(0xff8a8a);
     race.tintUntil = race.nowMs + 900;
-    race.shakeT = 0.17;
+    race.shakeT = 0.38;
+    race.hitK = 0;
+    race.dizzyT = 0.85;
     pop('oj', 'red');
     snd.bonk();
   }
@@ -678,6 +762,8 @@ gl_Position = projectionMatrix * mvPosition;`;
     race.finished = true;
     race.leanUntil = -1;            // nowMs freezes once finished — reset visuals here
     race.tintUntil = -1;
+    race.hitK = -1;
+    player.rotation.set(0, 0, 0);
     resetHamsterLook();
     snd.fanfare();
     addFx(0.9, k => { player.position.y = Math.sin(k * Math.PI) * 1.05; },
@@ -709,8 +795,18 @@ gl_Position = projectionMatrix * mvPosition;`;
       lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitch: -1e9,
       spawnAcc: 0, spawnEvery: SPAWN0, stumbleUntil: -1, boostUntil: -1, invulnUntil: -1,
       finished: false, shakeT: 0, tween: null, leanUntil: -1, tintUntil: -1,
+      hitK: -1, dizzyT: 0,
     });
     for (const it of items) deactivate(it);
+    for (const it of flying) {                      // knocked obstacles are inactive but visible
+      it.obj.visible = false;
+      it.obj.rotation.set(0, 0, 0);
+      it.obj.position.y = 0;
+      pool[it.type].push(it);
+    }
+    flying.length = 0;
+    dizzy.visible = false;
+    player.rotation.set(0, 0, 0);
     player.position.set(laneCenterX(1), 0, 0);
     resetHamsterLook();
     scoreEl.textContent = '0';
@@ -746,7 +842,7 @@ gl_Position = projectionMatrix * mvPosition;`;
   });
 
   /* ---------- camera layout (portrait & landscape) ---------- */
-  let camZ = 7.4, camY = 3.5, camXsmooth = 0;
+  let camZ = 7.4, camY = 3.5, camXsmooth = 0, baseFov = 55;
   function layout() {
     const w = innerWidth, h = innerHeight, a = w / h;
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));   // re-apply on monitor/DPR change
@@ -760,6 +856,7 @@ gl_Position = projectionMatrix * mvPosition;`;
       const need = (ROAD_HALF + 0.45) / (camZ * a);
       camera.fov = THREE.MathUtils.clamp(2 * Math.atan(need) * THREE.MathUtils.RAD2DEG + 1.5, 52, 80);
     }
+    baseFov = camera.fov;
     camera.updateProjectionMatrix();
     camera.position.set(0, camY, camZ);
     camera.lookAt(0, camY - 0.194 * (camZ + 10), -10);   // ~11° downward tilt → horizon in upper third
@@ -843,13 +940,60 @@ gl_Position = projectionMatrix * mvPosition;`;
     updateFx(dt);
     updateParticles(dt);
 
+    // knocked obstacles tumble up and sideways, then return to the pool
+    for (let i = flying.length - 1; i >= 0; i--) {
+      const it = flying[i], k = it.knock;
+      k.t += dt;
+      k.vy -= 21 * dt;
+      it.obj.position.x += k.vx * dt;
+      it.obj.position.y += k.vy * dt;
+      it.obj.position.z += k.vz * dt;
+      it.obj.rotation.x += k.sx * dt;
+      it.obj.rotation.z += k.sz * dt;
+      if (k.t >= 0.8 || it.obj.position.y < -0.4) {
+        it.obj.visible = false;
+        it.obj.rotation.set(0, 0, 0);
+        it.obj.position.y = 0;
+        flying.splice(i, 1);
+        pool[it.type].push(it);
+      }
+    }
+
+    // hit reaction: the whole wheel hops and wobbles, dizzy stars orbit
+    if (race.hitK >= 0) {
+      race.hitK += dt;
+      const k = race.hitK / 0.8;
+      if (k >= 1) {
+        race.hitK = -1;
+        player.position.y = 0;
+        player.rotation.set(0, 0, 0);
+      } else {
+        const d = 1 - k;
+        player.position.y = Math.abs(Math.sin(k * 7.5)) * 0.42 * d;
+        player.rotation.z = Math.sin(k * 11) * 0.5 * d;
+        player.rotation.x = Math.sin(k * 8 + 0.8) * 0.3 * d;
+      }
+    }
+    if (race.dizzyT > 0) {
+      race.dizzyT -= dt;
+      dizzy.visible = race.dizzyT > 0;
+      dizzy.rotation.y += dt * 8;
+    } else dizzy.visible = false;
+
+    // the stumble slowdown reads in the camera too: FOV narrows (and widens
+    // on a boost); wheel spin and road scroll already scale with eff()
+    const fovT = baseFov * (racing && race.nowMs < race.stumbleUntil ? 0.85
+      : racing && race.nowMs < race.boostUntil ? 1.06 : 1);
+    camera.fov += (fovT - camera.fov) * Math.min(1, dt * 7);
+    camera.updateProjectionMatrix();
+
     if (race.tintUntil >= 0 && race.nowMs > race.tintUntil) {
       hamMat.color.setHex(0xffffff);
       race.tintUntil = -1;
     }
 
     race.shakeT = Math.max(0, race.shakeT - dt);
-    const sh = race.shakeT > 0 ? (race.shakeT / 0.17) * 0.16 : 0;
+    const sh = race.shakeT > 0 ? (race.shakeT / 0.38) * 0.3 : 0;
     camXsmooth += (player.position.x * 0.22 - camXsmooth) * Math.min(1, dt * 8);
     camera.position.set(
       camXsmooth + (sh ? (Math.random() - 0.5) * sh : 0),
