@@ -361,6 +361,11 @@ function boot() {
 
   const eff = () => race.nowMs < race.stumbleUntil ? 0.45 : race.nowMs < race.boostUntil ? 1.55 : 1;
 
+  function resetHamsterLook() {
+    hamMat.color.setHex(0xffffff);
+    if (hamMat.map !== runTex) { hamMat.map = runTex; hamMat.needsUpdate = true; }
+  }
+
   function toLane(z) {
     z = Math.max(0, Math.min(2, z | 0));
     if (gameState !== 'race' || race.finished) return;
@@ -403,6 +408,9 @@ function boot() {
 
   function win() {
     race.finished = true;
+    race.leanUntil = -1;            // nowMs freezes once finished — reset visuals here
+    race.tintUntil = -1;
+    resetHamsterLook();
     finishEl.classList.remove('hidden');
     setTimeout(() => {
       finishEl.classList.add('hidden');
@@ -428,9 +436,7 @@ function boot() {
     });
     for (const it of items) deactivate(it);
     player.position.set(laneCenterX(1), 0, 0);
-    hamMat.color.setHex(0xffffff);
-    hamMat.map = runTex;
-    hamMat.needsUpdate = true;
+    resetHamsterLook();
     scoreEl.textContent = '0';
     barfillEl.style.inlineSize = '0%';
     menuEl.classList.add('hidden');
