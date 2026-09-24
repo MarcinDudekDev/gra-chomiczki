@@ -19,7 +19,8 @@ const SCROLL = 0.46;            // normalized depth per second
 const PLAYER_D = 0.88;          // player plane in normalized depth
 const K = 70;                   // world units per unit of normalized depth
 const zOfD = d => (d - PLAYER_D) * K;                  // d=0.88 → z=0 (player plane)
-const FINISH_T = TEST ? 4 : 26;
+const LEN = parseFloat(params.get('len') || '');
+const FINISH_T = TEST ? 4 : (Number.isFinite(LEN) ? Math.min(120, Math.max(5, LEN)) : 26);
 const LANE_S = 0.18, DEBOUNCE = 150;
 const SPAWN0 = 620, SPAWN_MIN = 360, SPAWN_STEP = 7;
 const KILL_D = 1.06, FAR_D = 0.22;
@@ -87,7 +88,7 @@ function boot() {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(C.cream);
-  scene.fog = new THREE.Fog(C.cream, 28, 88);
+  scene.fog = new THREE.Fog(C.cream, 30, 115);
 
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
 
@@ -374,6 +375,7 @@ gl_Position = projectionMatrix * mvPosition;`;
 
   const items = [];
   const pool = { seed: [], obs: [], power: [] };
+  const flying = [];                 // knocked-away obstacles still in the air
 
   function deactivate(it) {
     if (!it.active) return;
@@ -388,7 +390,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     if (type === 'obs') {
       let far = 0;
       for (const it of items) if (it.active && it.type === 'obs' && it.d < FAR_D) far++;
-      if (far >= 1) type = 'seed';
+      if (far >= 1 || FINISH_T - race.t < 1.5) type = 'seed';   // nothing to dodge at the gate
     }
     let it = pool[type].pop();
     if (!it) {
@@ -416,6 +418,139 @@ gl_Position = projectionMatrix * mvPosition;`;
     popupsEl.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
   }
+
+  /* ---------- fx: canvas textures, tiny anims, particle bursts ---------- */
+  function canvasTex(w, h, draw) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const tx = new THREE.CanvasTexture(c);
+    tx.colorSpace = THREE.SRGBColorSpace;
+    return tx;
+  }
+
+  // Wall-clock driven one-shot anims — they keep running through the finish
+  // celebration even though race.nowMs is already frozen.
+  const fxAnims = [];
+  const addFx = (dur, update, end) => fxAnims.push({ t: 0, dur, update, end });
+  function updateFx(dt) {
+    for (let i = fxAnims.length - 1; i >= 0; i--) {
+      const f = fxAnims[i];
+      f.t += dt;
+      if (f.t >= f.dur) { fxAnims.splice(i, 1); if (f.end) f.end(); }
+      else f.update(f.t / f.dur);
+    }
+  }
+
+  const PMAX = 180;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(PMAX * 3);
+  const pCol = new Float32Array(PMAX * 3);
+  const pVel = new Float32Array(PMAX * 3);
+  const pLife = new Float32Array(PMAX);
+  pPos.fill(-999);
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3).setUsage(THREE.DynamicDrawUsage));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+  const points = new THREE.Points(pGeo, new THREE.PointsMaterial({
+    size: 0.17, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false,
+  }));
+  points.frustumCulled = false;
+  scene.add(points);
+  let pHead = 0;
+  const tmpC = new THREE.Color();
+  function burst(x, y, z, { n = 12, cols = [C.gold], speed = 2, up = 3, life = 0.8 } = {}) {
+    for (let i = 0; i < n; i++) {
+      const idx = pHead;
+      pHead = (pHead + 1) % PMAX;
+      const j = idx * 3;
+      pPos[j] = x; pPos[j + 1] = y; pPos[j + 2] = z;
+      const a = Math.random() * Math.PI * 2, r = (0.35 + Math.random() * 0.65) * speed;
+      pVel[j] = Math.cos(a) * r;
+      pVel[j + 1] = up * (0.4 + Math.random());
+      pVel[j + 2] = Math.sin(a) * r - 1.5;               // drift a little down-track
+      pLife[idx] = life * (0.7 + Math.random() * 0.6);
+      tmpC.setHex(cols[(Math.random() * cols.length) | 0]);
+      pCol[j] = tmpC.r; pCol[j + 1] = tmpC.g; pCol[j + 2] = tmpC.b;
+    }
+    pGeo.attributes.color.needsUpdate = true;
+  }
+  function updateParticles(dt) {
+    for (let i = 0; i < PMAX; i++) {
+      if (pLife[i] <= 0) continue;
+      pLife[i] -= dt;
+      const j = i * 3;
+      pVel[j + 1] -= 8.5 * dt;
+      pPos[j] += pVel[j] * dt;
+      pPos[j + 1] += pVel[j + 1] * dt;
+      pPos[j + 2] += pVel[j + 2] * dt;
+      if (pLife[i] <= 0 || pPos[j + 1] < -0.3) { pLife[i] = 0; pPos[j + 1] = -999; }
+    }
+    pGeo.attributes.position.needsUpdate = true;
+  }
+
+  /* ---------- finish gate: a bright arch that rolls in like an item ---------- */
+  const GATE_SPEED = SCROLL * K;                      // world units per race-second
+  const gate = new THREE.Group();
+  {
+    const poleTex = canvasTex(32, 128, (x, w, h) => {
+      for (let i = 0; i < 8; i++) {
+        x.fillStyle = i % 2 ? '#e5484d' : '#ffffff';
+        x.fillRect(0, i * h / 8, w, h / 8 + 1);
+      }
+    });
+    const poleMat = new THREE.MeshLambertMaterial({ map: poleTex });
+    const poleGeo = new THREE.CylinderGeometry(0.17, 0.22, 4.4, 14);
+    const knobGeo = new THREE.SphereGeometry(0.32, 14, 10);
+    const knobMat = new THREE.MeshLambertMaterial({ color: C.gold });
+    const PX = ROAD_HALF + 0.85;
+    for (const s of [-1, 1]) {
+      const p = new THREE.Mesh(poleGeo, poleMat);
+      p.position.set(s * PX, 2.2, 0);
+      p.castShadow = true;
+      gate.add(p);
+      const k = new THREE.Mesh(knobGeo, knobMat);
+      k.position.set(s * PX, 4.55, 0);
+      gate.add(k);
+    }
+    const banTex = canvasTex(512, 96, (x, w, h) => {
+      const ch = 20, cw = w / 12;
+      for (let i = 0; i < 12; i++) {
+        x.fillStyle = i % 2 ? '#2b2b2b' : '#ffffff';
+        x.fillRect(i * cw, 0, cw, ch);
+        x.fillStyle = i % 2 ? '#ffffff' : '#2b2b2b';
+        x.fillRect(i * cw, h - ch, cw, ch);
+      }
+      x.fillStyle = '#ffffff';
+      x.fillRect(0, ch, w, h - 2 * ch);
+      x.fillStyle = '#d23b3b';
+      x.font = '800 46px sans-serif';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.fillText(t('gate_word'), w / 2, h / 2 + 2);
+    });
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(PX * 2, 1.05),
+      new THREE.MeshLambertMaterial({ map: banTex, side: THREE.DoubleSide }));
+    banner.position.set(0, 3.55, -0.08);
+    gate.add(banner);
+    const flagShape = new THREE.Shape();
+    flagShape.moveTo(-0.26, 0);
+    flagShape.lineTo(0.26, 0);
+    flagShape.lineTo(0, -0.5);
+    flagShape.closePath();
+    const flagGeo = new THREE.ShapeGeometry(flagShape);
+    const flagCols = [0xff5a6e, 0xffc94d, 0x4f9dff, 0x8fd9b6];
+    const flagMats = flagCols.map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+    for (let i = 0; i <= 10; i++) {
+      const u = i / 10;
+      const f = new THREE.Mesh(flagGeo, flagMats[i % flagMats.length]);
+      f.position.set((u - 0.5) * (PX * 2 - 0.7), 4.5 - 0.55 * (1 - (2 * u - 1) ** 2), 0.1);
+      f.rotation.z = (u - 0.5) * 0.8;
+      gate.add(f);
+    }
+  }
+  gate.position.z = -FINISH_T * GATE_SPEED;
+  scene.add(gate);
 
   /* ---------- sound: tiny WebAudio synth, no audio files ---------- */
   const snd = (() => {
@@ -545,6 +680,12 @@ gl_Position = projectionMatrix * mvPosition;`;
     race.tintUntil = -1;
     resetHamsterLook();
     snd.fanfare();
+    addFx(0.9, k => { player.position.y = Math.sin(k * Math.PI) * 1.05; },
+      () => { player.position.y = 0; });                       // little victory hop
+    burst(player.position.x, 2.4, -0.8, {
+      n: 90, speed: 4.2, up: 5.5, life: 1.5,
+      cols: [0xff5a6e, 0xffc94d, 0x4f9dff, 0x8fd9b6, 0xffffff],
+    });
     finishEl.classList.remove('hidden');
     setTimeout(() => {
       finishEl.classList.add('hidden');
@@ -696,6 +837,12 @@ gl_Position = projectionMatrix * mvPosition;`;
     bendNow.y += (seg.y * BEND_Y - bendNow.y) * bendK;
     bendU.value.set(bendNow.x, bendNow.y);
 
+    // the finish gate rolls in like an item and reaches the player at FINISH_T
+    gate.position.z = -Math.max(0, FINISH_T - race.t) * GATE_SPEED;
+
+    updateFx(dt);
+    updateParticles(dt);
+
     if (race.tintUntil >= 0 && race.nowMs > race.tintUntil) {
       hamMat.color.setHex(0xffffff);
       race.tintUntil = -1;
@@ -729,5 +876,10 @@ gl_Position = projectionMatrix * mvPosition;`;
     score: () => race.score,
     stumbles: () => race.stumbles,
     bendAt,
+    finishGate: () => gate,
+    playerZ: () => player.position.z,
+    finished: () => race.finished,
+    raceTime: () => race.t,
+    knocked: () => flying.map(i => i.obj),
   };
 }
