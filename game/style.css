@@ -1,0 +1,231 @@
+/* Chomiczki — DOM overlay UI. Logical properties only (RTL-safe). */
+
+@font-face {
+  font-family: 'Baloo 2';
+  src: url('fonts/baloo2-latinext.woff2') format('woff2');
+  font-weight: 400 800; font-style: normal; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Baloo 2';
+  src: url('fonts/baloo2-latin.woff2') format('woff2');
+  font-weight: 400 800; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Quicksand';
+  src: url('fonts/quicksand-latinext.woff2') format('woff2');
+  font-weight: 400 700; font-style: normal; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Quicksand';
+  src: url('fonts/quicksand-latin.woff2') format('woff2');
+  font-weight: 400 700; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --cream: #fff3df;
+  --ink: #5b4636;
+  --orange: #ff8a3c;
+  --orange-d: #e07e36;
+  --gold: #ffc94d;
+  --mint: #8fd9b6;
+  --soft: #fff8ec;
+  --star-off: #e6d6bf;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--cream);
+  font-family: 'Baloo 2', 'Quicksand', system-ui, sans-serif;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+canvas { position: fixed; inset: 0; display: block; z-index: 0; }
+
+#ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.hidden { display: none !important; }
+
+#menu {
+  justify-content: flex-start;
+  padding-block-start: 13vh;
+}
+#menu .bigbtn {
+  margin-block-start: auto;
+  margin-block-end: 9vh;
+}
+
+.gametitle {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(3rem, 15vmin, 7.5rem);
+  line-height: 1;
+  color: var(--orange);
+  -webkit-text-stroke: 0.09em #ffffff;
+  paint-order: stroke fill;
+  text-shadow: 0 0.06em 0 rgba(91, 70, 54, 0.18);
+}
+
+.subtitle {
+  margin: 0;
+  font-family: 'Quicksand', 'Baloo 2', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.05rem, 4.2vmin, 1.9rem);
+  color: #8a7461;
+}
+
+.bigbtn {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 0;
+  border-radius: 2.4rem;
+  padding: 0.9rem 3.4rem;
+  font: inherit;
+  font-weight: 800;
+  font-size: clamp(1.7rem, 6.5vmin, 2.8rem);
+  color: #ffffff;
+  background: var(--orange);
+  box-shadow: 0 0.32em 0 var(--orange-d), 0 0.7em 1.4em rgba(90, 60, 30, 0.28);
+  animation: btnPulse 1.2s ease-in-out infinite;
+}
+.bigbtn:active { box-shadow: 0 0.1em 0 var(--orange-d); }
+
+@keyframes btnPulse { 50% { filter: brightness(1.09); } }
+
+/* ---------- HUD ---------- */
+#hud {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0;
+}
+
+#scorewrap {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  padding-block: 0.25rem;
+  padding-inline: 0.7rem 1.1rem;
+}
+
+.seeddot {
+  inline-size: 1.7rem;
+  block-size: 1.7rem;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe08a, var(--gold) 58%, #c8860a);
+  box-shadow: inset 0 -0.22em 0 rgba(122, 77, 15, 0.35), 0 0.08em 0.15em rgba(91, 70, 54, 0.4);
+}
+
+#score {
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: var(--soft);
+  text-shadow: 0 0.09em 0 var(--ink);
+  line-height: 1;
+}
+
+#barwrap { flex: 1; display: flex; align-items: center; gap: 0.55rem; min-inline-size: 0; }
+
+#bar {
+  flex: 1;
+  block-size: 1.05rem;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 0.16rem rgba(91, 70, 54, 0.22);
+}
+
+#barfill {
+  block-size: 100%;
+  inline-size: 0%;
+  background: var(--mint);
+  border-radius: 999px;
+}
+
+#flag { font-size: 2rem; line-height: 1; }
+
+/* ---------- popups ---------- */
+#popups { position: fixed; inset: 0; pointer-events: none; }
+
+.pop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-size: clamp(2.2rem, 9vmin, 3.6rem);
+  color: var(--gold);
+  -webkit-text-stroke: 0.14em #ffffff;
+  paint-order: stroke fill;
+  animation: popfly 0.7s ease-out forwards;
+  white-space: nowrap;
+}
+.pop.star { color: #ffd76b; }
+.pop.red { color: #ff7a7a; }
+
+@keyframes popfly {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
+  to   { opacity: 0; transform: translate(-50%, -160%) scale(1.2); }
+}
+
+/* ---------- finish banner ---------- */
+#finishbanner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: clamp(2.6rem, 11vmin, 5.4rem);
+  color: #2e8b57;
+  -webkit-text-stroke: 0.1em #ffffff;
+  paint-order: stroke fill;
+  animation: bannerPop 0.45s ease-out;
+}
+
+@keyframes bannerPop {
+  0% { scale: 0.6; opacity: 0; }
+  60% { scale: 1.12; }
+  100% { scale: 1; opacity: 1; }
+}
+
+/* ---------- result ---------- */
+#result { background: rgba(255, 243, 223, 0.93); }
+
+#stars { display: flex; gap: 0.4em; font-size: clamp(3.4rem, 15vmin, 6.5rem); line-height: 1; }
+
+.st { color: var(--star-off); }
+.st.on { color: #ffd24d; text-shadow: 0 0.06em 0 rgba(200, 134, 10, 0.45); }
+
+#seedrow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: clamp(2rem, 8vmin, 3.2rem);
+  font-weight: 800;
+  color: var(--ink);
+}
+#seedrow .seeddot { inline-size: 2.4rem; block-size: 2.4rem; }

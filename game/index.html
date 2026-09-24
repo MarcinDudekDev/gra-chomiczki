@@ -4,16 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chomiczki — gra (PoC)</title>
-<style>
-  html,body{margin:0;height:100%;background:#3a2a1c;overflow:hidden;
-    font-family:'Baloo 2','Quicksand',system-ui,sans-serif;touch-action:none;}
-  #game{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
-  canvas{display:block;}
-</style>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head>
 <body>
-<div id="game"></div>
-<script src="phaser.min.js"></script>
-<script src="game.js"></script>
+<div id="ui">
+  <section id="menu" class="screen">
+    <h1 id="mtitle" class="gametitle"></h1>
+    <p id="msub" class="subtitle"></p>
+    <button id="start" class="bigbtn"></button>
+  </section>
+  <section id="hud" class="screen hidden">
+    <div id="scorewrap"><span class="seeddot" aria-hidden="true"></span><span id="score">0</span></div>
+    <div id="barwrap"><div id="bar"><div id="barfill"></div></div><span id="flag" aria-hidden="true">🏁</span></div>
+  </section>
+  <div id="finishbanner" class="hidden"></div>
+  <section id="result" class="screen hidden">
+    <h1 id="rtitle" class="gametitle"></h1>
+    <div id="stars" aria-hidden="true"><span class="st">★</span><span class="st">★</span><span class="st">★</span></div>
+    <div id="seedrow"><span class="seeddot" aria-hidden="true"></span><span id="seednum"></span></div>
+    <button id="again" class="bigbtn"></button>
+  </section>
+  <div id="popups" aria-hidden="true"></div>
+</div>
+<script type="module" src="main.js"></script>
 </body>
 </html>
