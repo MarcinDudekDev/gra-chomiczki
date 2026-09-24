@@ -116,10 +116,11 @@ canvas { position: fixed; inset: 0; display: block; z-index: 0; }
 /* ---------- HUD ---------- */
 #hud {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 0.8rem;
-  padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0;
+  padding-block: calc(0.7rem + env(safe-area-inset-top)) 0;
+  padding-inline: 0.9rem;
 }
 
 #scorewrap {
