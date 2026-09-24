@@ -68,7 +68,7 @@ try {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   document.body.prepend(renderer.domElement);
   renderer.domElement.addEventListener('webglcontextlost', e => {
     e.preventDefault();
