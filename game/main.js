@@ -668,7 +668,7 @@ gl_Position = projectionMatrix * mvPosition;`;
   /* ---------- race state ---------- */
   let gameState = 'menu';
   const race = {
-    lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitch: -1e9,
+    lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitchAt: -1e9,
     spawnAcc: 0, spawnEvery: SPAWN0, stumbleUntil: -1, boostUntil: -1, invulnUntil: -1,
     finished: false, shakeT: 0, tween: null, leanUntil: -1, tintUntil: -1, runT: 0,
     hitK: -1, dizzyT: 0,
@@ -684,10 +684,10 @@ gl_Position = projectionMatrix * mvPosition;`;
   function toLane(z) {
     z = Math.max(0, Math.min(2, z | 0));
     if (gameState !== 'race' || race.finished) return;
-    if (race.nowMs - race.lastSwitch < DEBOUNCE || z === race.lane) return;
+    if (performance.now() - race.lastSwitchAt < DEBOUNCE || z === race.lane) return;
     const dir = z - race.lane;
     race.lane = z;
-    race.lastSwitch = race.nowMs;
+    race.lastSwitchAt = performance.now();
     race.tween = { from: player.position.x, to: laneCenterX(z), p: 0 };
     laneTex.offset.x = dir < 0 ? 1 / 3 : 2 / 3;
     hamMat.map = laneTex;
@@ -792,7 +792,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     snd.unlock();                      // START click / Space is the first gesture
     gameState = 'race';
     Object.assign(race, {
-      lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitch: -1e9,
+      lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitchAt: -1e9,
       spawnAcc: 0, spawnEvery: SPAWN0, stumbleUntil: -1, boostUntil: -1, invulnUntil: -1,
       finished: false, shakeT: 0, tween: null, leanUntil: -1, tintUntil: -1,
       hitK: -1, dizzyT: 0,
