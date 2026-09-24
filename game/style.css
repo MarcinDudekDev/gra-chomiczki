@@ -216,6 +216,9 @@ canvas { position: fixed; inset: 0; display: block; z-index: 0; }
 /* ---------- result ---------- */
 #result { background: rgba(255, 243, 223, 0.93); }
 
+#fatal { background: var(--cream); }
+#fatal .subtitle { max-inline-size: 34ch; }
+
 #stars { display: flex; gap: 0.4em; font-size: clamp(3.4rem, 15vmin, 6.5rem); line-height: 1; }
 
 .st { color: var(--star-off); }

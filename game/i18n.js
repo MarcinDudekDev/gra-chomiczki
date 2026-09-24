@@ -14,6 +14,8 @@ const catalogs = {
     aria_start: 'Rozpocznij wyścig',
     aria_again: 'Zagraj jeszcze raz',
     aria_score: 'Zebrane ziarna',
+    err_title: 'UPS! 🐹',
+    err_webgl: 'Twoja przeglądarka nie potrafi narysować tej gry — brakuje WebGL.',
   },
 };
 
