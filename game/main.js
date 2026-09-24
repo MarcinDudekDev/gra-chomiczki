@@ -35,7 +35,7 @@ const C = {
 /* ---------- DOM + i18n FIRST — before anything that can throw ---------- */
 const $ = id => document.getElementById(id);
 const menuEl = $('menu'), hudEl = $('hud'), resultEl = $('result'), finishEl = $('finishbanner');
-const fatalEl = $('fatal');
+const fatalEl = $('fatal'), muteEl = $('mute');
 const scoreEl = $('score'), barfillEl = $('barfill'), popupsEl = $('popups');
 const startBtn = $('start'), againBtn = $('again');
 const starEls = [...document.querySelectorAll('#stars .st')];
@@ -61,6 +61,7 @@ function showFatal() {
   hudEl.classList.add('hidden');
   resultEl.classList.add('hidden');
   finishEl.classList.add('hidden');
+  muteEl.classList.add('hidden');      // no audio exists without WebGL
   fatalEl.classList.remove('hidden');
 }
 
@@ -820,7 +821,7 @@ gl_Position = projectionMatrix * mvPosition;`;
   /* ---------- input ---------- */
   startBtn.addEventListener('click', startRace);
   againBtn.addEventListener('click', startRace);
-  const muteBtn = $('mute'), muteIco = $('muteico');
+  const muteBtn = muteEl, muteIco = $('muteico');
   function paintMute() {
     const m = snd.muted;
     muteIco.textContent = m ? '🔇' : '🔊';
