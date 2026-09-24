@@ -133,24 +133,27 @@ for (let i = 0; i < 16; i++) {
 const player = new THREE.Group();
 const wheel = new THREE.Group();
 
-const rimGeo = new THREE.TorusGeometry(1.0, 0.07, 12, 36);
+// Rolling wheel: axle along X — rims in the YZ plane at x=±0.85,
+// rungs parallel to X spanning between them, spin about X.
+const rimGeo = new THREE.TorusGeometry(1.05, 0.07, 12, 36);
+rimGeo.rotateY(Math.PI / 2);
 const rimMat = new THREE.MeshLambertMaterial({ color: C.wood });
-for (const zz of [-0.27, 0.27]) {
+for (const xx of [-0.85, 0.85]) {
   const r = new THREE.Mesh(rimGeo, rimMat);
-  r.position.z = zz; r.castShadow = true;
+  r.position.x = xx; r.castShadow = true;
   wheel.add(r);
 }
-const rungGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 6);
+const rungGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.7, 6);
+rungGeo.rotateZ(Math.PI / 2);
 const rungMat = new THREE.MeshLambertMaterial({ color: C.woodDark });
-for (let i = 0; i < 14; i++) {
-  const a = i / 14 * Math.PI * 2;
+for (let i = 0; i < 12; i++) {
+  const a = i / 12 * Math.PI * 2;
   const g = new THREE.Mesh(rungGeo, rungMat);
-  g.rotation.x = Math.PI / 2;
-  g.position.set(Math.cos(a), Math.sin(a), 0);
+  g.position.set(0, Math.cos(a) * 1.0, Math.sin(a) * 1.0);
   g.castShadow = true;
   wheel.add(g);
 }
-wheel.position.y = 1.07;
+wheel.position.y = 1.12;
 player.add(wheel);
 player.scale.setScalar(1.12);
 
@@ -406,10 +409,10 @@ function layout() {
   renderer.setSize(w, h);
   camera.aspect = a;
   if (a >= 1) {
-    camZ = 7.4; camY = 3.3; camera.fov = 55;
+    camZ = 7.4; camY = 3.5; camera.fov = 55;
   } else {
     camZ = Math.min(15, 7.4 / a * 0.92);
-    camY = camZ * 0.42;
+    camY = camZ * 0.45;
     const need = (ROAD_HALF + 0.45) / (camZ * a);
     camera.fov = THREE.MathUtils.clamp(2 * Math.atan(need) * THREE.MathUtils.RAD2DEG + 1.5, 52, 80);
   }
@@ -467,7 +470,8 @@ function tick(dt) {
     hamMat.needsUpdate = true;
   }
 
-  wheel.rotation.z -= (racing ? vw * 0.32 : 2.5) * dt;
+  // roll forward: rungs under the hamster move backward (+Z, toward camera)
+  wheel.rotation.x -= (racing ? vw * 0.32 : 2.5) * dt;
 
   if (race.tween) {
     const tw = race.tween;
