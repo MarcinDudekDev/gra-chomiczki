@@ -70,6 +70,7 @@ try {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.domElement.setAttribute('aria-hidden', 'true');
   document.body.prepend(renderer.domElement);
   renderer.domElement.addEventListener('webglcontextlost', e => {
     e.preventDefault();
@@ -464,6 +465,7 @@ function boot() {
   let camZ = 7.4, camY = 3.5, camXsmooth = 0;
   function layout() {
     const w = innerWidth, h = innerHeight, a = w / h;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));   // re-apply on monitor/DPR change
     renderer.setSize(w, h);
     camera.aspect = a;
     if (a >= 1) {
