@@ -170,6 +170,26 @@ canvas { position: fixed; inset: 0; display: block; z-index: 0; }
 
 #flag { font-size: 2rem; line-height: 1; }
 
+#mute {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  inline-size: 3.3rem;
+  block-size: 3.3rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.55rem;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+#mute:active { filter: brightness(1.2); }
+
 /* ---------- popups ---------- */
 #popups { position: fixed; inset: 0; pointer-events: none; }
 

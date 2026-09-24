@@ -417,6 +417,70 @@ gl_Position = projectionMatrix * mvPosition;`;
     el.addEventListener('animationend', () => el.remove());
   }
 
+  /* ---------- sound: tiny WebAudio synth, no audio files ---------- */
+  const snd = (() => {
+    let ctx = null, master = null, muted = false;
+    try { muted = localStorage.getItem('chomiczki_mute') === '1'; } catch (e) {}
+    function unlock() {
+      if (!ctx) {
+        try {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          master = ctx.createGain();
+          master.gain.value = 0.5;
+          master.connect(ctx.destination);
+        } catch (e) { ctx = null; }
+      }
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    }
+    function tone(f0, f1, dur, type, vol, at = 0) {
+      if (!ctx || muted) return;
+      const t0 = ctx.currentTime + at;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t0);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(master);
+      o.start(t0);
+      o.stop(t0 + dur + 0.05);
+    }
+    function hiss(dur, f0, f1, vol, at = 0) {
+      if (!ctx || muted) return;
+      const t0 = ctx.currentTime + at;
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 1.1;
+      bp.frequency.setValueAtTime(f0, t0);
+      bp.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(bp).connect(g).connect(master);
+      src.start(t0);
+    }
+    return {
+      unlock,
+      get muted() { return muted; },
+      toggle() {
+        muted = !muted;
+        try { localStorage.setItem('chomiczki_mute', muted ? '1' : '0'); } catch (e) {}
+        return muted;
+      },
+      pling() { tone(880, 1560, 0.12, 'triangle', 0.22); tone(1760, 1760, 0.07, 'sine', 0.1, 0.03); },
+      bonk() { tone(230, 75, 0.2, 'square', 0.2); hiss(0.14, 700, 180, 0.22); },
+      whoosh() { hiss(0.42, 500, 3400, 0.16); tone(320, 980, 0.32, 'sine', 0.07); },
+      fanfare() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.22, i * 0.1)); },
+    };
+  })();
+
   /* ---------- race state ---------- */
   let gameState = 'menu';
   const race = {
@@ -452,6 +516,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     scoreEl.textContent = race.score;
     race.boostUntil = race.nowMs + 240;
     pop('plus', '');
+    snd.pling();
   }
   function powerup(it) {
     deactivate(it);
@@ -460,6 +525,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     hamMat.color.setHex(0xffe08a);
     race.tintUntil = race.nowMs + 3000;
     pop('star_pop', 'star');
+    snd.whoosh();
   }
   function hit(it) {
     deactivate(it);
@@ -470,6 +536,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     race.tintUntil = race.nowMs + 900;
     race.shakeT = 0.17;
     pop('oj', 'red');
+    snd.bonk();
   }
 
   function win() {
@@ -477,6 +544,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     race.leanUntil = -1;            // nowMs freezes once finished — reset visuals here
     race.tintUntil = -1;
     resetHamsterLook();
+    snd.fanfare();
     finishEl.classList.remove('hidden');
     setTimeout(() => {
       finishEl.classList.add('hidden');
@@ -494,6 +562,7 @@ gl_Position = projectionMatrix * mvPosition;`;
   }
 
   function startRace() {
+    snd.unlock();                      // START click / Space is the first gesture
     gameState = 'race';
     Object.assign(race, {
       lane: 1, t: 0, score: 0, stumbles: 0, nowMs: 0, lastSwitch: -1e9,
@@ -514,6 +583,15 @@ gl_Position = projectionMatrix * mvPosition;`;
   /* ---------- input ---------- */
   startBtn.addEventListener('click', startRace);
   againBtn.addEventListener('click', startRace);
+  const muteBtn = $('mute'), muteIco = $('muteico');
+  function paintMute() {
+    const m = snd.muted;
+    muteIco.textContent = m ? '🔇' : '🔊';
+    muteBtn.setAttribute('aria-pressed', m ? 'true' : 'false');
+    muteBtn.setAttribute('aria-label', t(m ? 'aria_unmute' : 'aria_mute'));
+  }
+  muteBtn.addEventListener('click', () => { snd.unlock(); snd.toggle(); paintMute(); });
+  paintMute();
   addEventListener('keydown', e => {
     if (e.code === 'Space') {
       e.preventDefault();
