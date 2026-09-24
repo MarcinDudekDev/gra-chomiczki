@@ -105,11 +105,75 @@ function boot() {
   scene.add(sun, sun.target);
   sun.target.position.set(0, 0, -6);
 
+  /* ---------- curved world ----------
+     Every material gets a vertex-shader offset: ahead of the player (dz>0)
+     positions shift by (curveX*dz^2, curveY*dz^2) in world space. Gameplay
+     stays straight — only the rendered world bends, so lane logic, item
+     positions and collision math are untouched. */
+  const bendU = { value: new THREE.Vector2(0, 0) };    // (curveX, curveY)
+  const bendNow = { x: 0, y: 0 };
+  const bendAt = dz => {                             // exact offset the shader applies
+    const d = Math.max(0, dz);
+    return { x: bendNow.x * d * d, y: bendNow.y * d * d };
+  };
+
+  const BEND_PROJECT = `vec4 bendWorld = modelMatrix * vec4( transformed, 1.0 );
+float bendDz = max( 0.0, - bendWorld.z );
+bendWorld.x += uBend.x * bendDz * bendDz;
+bendWorld.y += uBend.y * bendDz * bendDz;
+vec4 mvPosition = viewMatrix * bendWorld;
+gl_Position = projectionMatrix * mvPosition;`;
+  const BEND_WORLDPOS = `#include <worldpos_vertex>
+#if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || NUM_SPOT_LIGHT_COORDS > 0
+	float bendDzW = max( 0.0, - worldPosition.z );
+	worldPosition.x += uBend.x * bendDzW * bendDzW;
+	worldPosition.y += uBend.y * bendDzW * bendDzW;
+#endif`;
+
+  const bendPatched = new Set();
+  function bendifyMat(m) {
+    if (!m || bendPatched.has(m)) return m;
+    bendPatched.add(m);
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = shader => {
+      if (prev) prev.call(m, shader);
+      shader.uniforms.uBend = bendU;
+      shader.vertexShader = 'uniform vec2 uBend;\n' + shader.vertexShader
+        .replace('#include <project_vertex>', BEND_PROJECT)
+        .replace('#include <worldpos_vertex>', BEND_WORLDPOS);
+    };
+    return m;
+  }
+
+  // Casters share one depth material with the same bend, and receivers look
+  // the map up at bent world positions — shadows stay glued to objects.
+  const bentDepth = bendifyMat(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
+  function bendifyRoot(root) {
+    root.traverse(o => {
+      if (!o.isMesh && !o.isPoints) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) bendifyMat(m);
+      if (o.castShadow) o.customDepthMaterial = bentDepth;
+    });
+  }
+
+  // Bend schedule (by race.t): settle, then a repeating left/straight/
+  // right/hill cycle. bendNow eases toward the active segment's target.
+  const BEND_X = 0.0034, BEND_Y = 0.0016;            // ~5.4 lateral / ~2.6 up at dz=40
+  const bendPlan = (() => {
+    const p = [{ t: 1.6, x: 0, y: 0 }];
+    const cycle = [[-1, 0, 3.8], [0, 0, 2.2], [1, 0, 3.8], [0, 1, 3.6], [0, 0, 2.4]];
+    let tt = 1.6, i = 0;
+    while (tt < 150) { const [x, y, d] = cycle[i++ % cycle.length]; tt += d; p.push({ t: tt, x, y }); }
+    return p;
+  })();
+
   /* ---------- static world ---------- */
   const ROAD_LEN = 240, ROAD_Z = -100;
 
+  // Long static geometry is subdivided along Z so the vertex-shader bend
+  // (below) can curve it smoothly — a 2-quad plane could only tilt.
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, ROAD_LEN + 40),
+    new THREE.PlaneGeometry(30, ROAD_LEN + 40, 1, 140),
     new THREE.MeshLambertMaterial({ color: C.road2 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(0, -0.02, ROAD_Z);
@@ -117,7 +181,7 @@ function boot() {
   scene.add(ground);
 
   const road = new THREE.Mesh(
-    new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN),
+    new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN, 1, 120),
     new THREE.MeshLambertMaterial({ color: C.road }));
   road.rotation.x = -Math.PI / 2;
   road.position.set(0, 0, ROAD_Z);
@@ -126,26 +190,26 @@ function boot() {
 
   for (const s of [-1, 1]) {                                 // road edges
     const e = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.05, ROAD_LEN),
+      new THREE.BoxGeometry(0.14, 0.05, ROAD_LEN, 1, 1, 120),
       new THREE.MeshLambertMaterial({ color: C.edge }));
     e.position.set(s * ROAD_HALF, 0.025, ROAD_Z);
     scene.add(e);
   }
   for (const s of [-1, 1]) {                                 // lane dividers: real straight geometry
     const d = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.045, ROAD_LEN),
+      new THREE.BoxGeometry(0.1, 0.045, ROAD_LEN, 1, 1, 120),
       new THREE.MeshLambertMaterial({ color: C.line }));
     d.position.set(s * LANE_W / 2, 0.022, ROAD_Z);
     scene.add(d);
   }
   for (const s of [-1, 1]) {                                 // room walls + baseboards
     const w = new THREE.Mesh(
-      new THREE.BoxGeometry(0.6, 7.5, ROAD_LEN + 40),
+      new THREE.BoxGeometry(0.6, 7.5, ROAD_LEN + 40, 1, 1, 140),
       new THREE.MeshLambertMaterial({ color: C.wall }));
     w.position.set(s * 10.2, 3.75, ROAD_Z);
     scene.add(w);
     const b = new THREE.Mesh(
-      new THREE.BoxGeometry(0.72, 0.5, ROAD_LEN + 40),
+      new THREE.BoxGeometry(0.72, 0.5, ROAD_LEN + 40, 1, 1, 140),
       new THREE.MeshLambertMaterial({ color: C.wall2 }));
     b.position.set(s * 10.1, 0.25, ROAD_Z);
     scene.add(b);
@@ -329,6 +393,7 @@ function boot() {
     let it = pool[type].pop();
     if (!it) {
       it = { type, active: false, lane: 0, d: 0, obj: builders[type]() };
+      bendifyRoot(it.obj);           // created after boot's scene-wide pass
       scene.add(it.obj);
       items.push(it);
     }
@@ -483,6 +548,9 @@ function boot() {
   addEventListener('resize', layout);
   layout();
 
+  // Everything placed in the scene during boot bends with the world.
+  bendifyRoot(scene);
+
   /* ---------- per-frame ---------- */
   function updateRace(dt, e, v) {
     race.nowMs += dt * 1000;
@@ -542,6 +610,14 @@ function boot() {
 
     if (racing) updateRace(dt, e, v);
 
+    // ease the world bend toward the active segment's target
+    let seg = bendPlan[bendPlan.length - 1];
+    for (const s of bendPlan) if (race.t < s.t) { seg = s; break; }
+    const bendK = Math.min(1, dt * 1.8);
+    bendNow.x += (seg.x * BEND_X - bendNow.x) * bendK;
+    bendNow.y += (seg.y * BEND_Y - bendNow.y) * bendK;
+    bendU.value.set(bendNow.x, bendNow.y);
+
     if (race.tintUntil >= 0 && race.nowMs > race.tintUntil) {
       hamMat.color.setHex(0xffffff);
       race.tintUntil = -1;
@@ -574,5 +650,6 @@ function boot() {
     laneCenterX, laneBoundaryX,
     score: () => race.score,
     stumbles: () => race.stumbles,
+    bendAt,
   };
 }
