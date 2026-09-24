@@ -615,7 +615,7 @@ gl_Position = projectionMatrix * mvPosition;`;
           master.connect(ctx.destination);
         } catch (e) { ctx = null; }
       }
-      if (ctx && ctx.state === 'suspended') ctx.resume();
+      if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     }
     function tone(f0, f1, dur, type, vol, at = 0) {
       if (!ctx || muted) return;
@@ -838,7 +838,7 @@ gl_Position = projectionMatrix * mvPosition;`;
     else if (e.code === 'ArrowRight') { e.preventDefault(); toLane(race.lane + 1); }
   });
   addEventListener('pointerdown', e => {
-    if (gameState !== 'race' || e.target.closest('button')) return;
+    if (gameState !== 'race' || !(e.target instanceof Element) || e.target.closest('button')) return;
     toLane(Math.floor(3 * e.clientX / innerWidth));
   });
 
