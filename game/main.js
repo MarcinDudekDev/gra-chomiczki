@@ -202,11 +202,35 @@ function boot() {
   player.add(wheel);
   player.scale.setScalar(1.12);
 
+  // Sprite sheets; on load failure swap in a procedural blob so the wheel is never empty.
+  function hamsterBlobCanvas(frames) {
+    const c = document.createElement('canvas');
+    c.width = 256 * frames; c.height = 256;
+    const x = c.getContext('2d');
+    const TAU = Math.PI * 2;
+    for (let i = 0; i < frames; i++) {
+      const cx = i * 256 + 128;
+      x.fillStyle = '#d9a066';
+      x.beginPath(); x.ellipse(cx, 152, 82, 92, 0, 0, TAU); x.fill();      // body
+      x.beginPath(); x.ellipse(cx - 52, 64, 26, 30, 0, 0, TAU); x.fill();  // ears
+      x.beginPath(); x.ellipse(cx + 52, 64, 26, 30, 0, 0, TAU); x.fill();
+      x.fillStyle = '#f3d8b8';
+      x.beginPath(); x.ellipse(cx, 180, 52, 52, 0, 0, TAU); x.fill();      // belly patch
+      x.beginPath(); x.ellipse(cx, 226, 14, 10, 0, 0, TAU); x.fill();      // tail nub
+      x.fillStyle = '#f0a0a8';
+      x.beginPath(); x.ellipse(cx - 34, 236, 20, 12, 0, 0, TAU); x.fill(); // feet
+      x.beginPath(); x.ellipse(cx + 34, 236, 20, 12, 0, 0, TAU); x.fill();
+    }
+    return c;
+  }
+
   const texLoader = new THREE.TextureLoader();
-  const runTex = texLoader.load('assets/chomik_run.png');
+  const runTex = texLoader.load('assets/chomik_run.png', undefined, undefined,
+    () => { runTex.image = hamsterBlobCanvas(6); runTex.needsUpdate = true; });
   runTex.colorSpace = THREE.SRGBColorSpace;
   runTex.repeat.set(1 / 6, 1);
-  const laneTex = texLoader.load('assets/chomik_lane.png');
+  const laneTex = texLoader.load('assets/chomik_lane.png', undefined, undefined,
+    () => { laneTex.image = hamsterBlobCanvas(3); laneTex.needsUpdate = true; });
   laneTex.colorSpace = THREE.SRGBColorSpace;
   laneTex.repeat.set(1 / 3, 1);
 
