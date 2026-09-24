@@ -1,6 +1,7 @@
 /* Chomiczki — i18n. Every user-facing string lives in these catalogs. */
 const catalogs = {
   pl: {
+    doc_title: 'Chomiczki — gra',
     title: 'CHOMICZKI',
     subtitle: 'biegnij • omijaj • zbieraj ziarna',
     start: 'START',

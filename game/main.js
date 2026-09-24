@@ -40,6 +40,7 @@ const startBtn = $('start'), againBtn = $('again');
 const starEls = [...document.querySelectorAll('#stars .st')];
 
 function applyStrings() {
+  document.title = t('doc_title');
   $('mtitle').textContent = t('title');
   $('msub').textContent = t('subtitle');
   startBtn.textContent = t('start');
