@@ -292,11 +292,11 @@ gl_Position = projectionMatrix * mvPosition;`;
   }
 
   const texLoader = new THREE.TextureLoader();
-  const runTex = texLoader.load('assets/chomik_run.png', undefined, undefined,
+  const runTex = texLoader.load('assets/chomik_run.png', t => renderer.initTexture(t), undefined,
     () => { runTex.image = hamsterBlobCanvas(6); runTex.needsUpdate = true; });
   runTex.colorSpace = THREE.SRGBColorSpace;
   runTex.repeat.set(1 / 6, 1);
-  const laneTex = texLoader.load('assets/chomik_lane.png', undefined, undefined,
+  const laneTex = texLoader.load('assets/chomik_lane.png', t => renderer.initTexture(t), undefined,
     () => { laneTex.image = hamsterBlobCanvas(3); laneTex.needsUpdate = true; });
   laneTex.colorSpace = THREE.SRGBColorSpace;
   laneTex.repeat.set(1 / 3, 1);
@@ -866,6 +866,37 @@ gl_Position = projectionMatrix * mvPosition;`;
 
   // Everything placed in the scene during boot bends with the world.
   bendifyRoot(scene);
+
+  /* ---------- shader warm-up ----------
+     Item/glow/gate resources used to initialize lazily on first render —
+     mid-race stalls that could swallow a lane input. One instance of
+     every item type exists from boot as pool stock; compile() walks the
+     whole graph (visible or culled) for programs, then one offscreen
+     frame draws everything so textures and buffers upload too. All warm
+     before START can be pressed. */
+  for (const type of ['seed', 'obs', 'power']) {
+    const it = { type, active: false, lane: 0, d: 0, obj: builders[type]() };
+    bendifyRoot(it.obj);
+    it.obj.visible = false;
+    scene.add(it.obj);
+    items.push(it);
+    pool[type].push(it);
+  }
+  renderer.compile(scene, camera);
+  {
+    const warm = [glow, dizzy];
+    gate.position.z = -8;
+    for (const o of warm) o.visible = true;
+    for (const it of items) it.obj.visible = true;
+    const rt = new THREE.WebGLRenderTarget(4, 4);
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    rt.dispose();
+    gate.position.z = -FINISH_T * GATE_SPEED;
+    for (const o of warm) o.visible = false;
+    for (const it of items) it.obj.visible = false;
+  }
 
   /* ---------- per-frame ---------- */
   function updateRace(dt, e, v) {
